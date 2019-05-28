@@ -17,17 +17,22 @@ from keras import initializers
 
 from keras.models import model_from_json
 
+import logging
+import sys
+import os
 
 def test():
 
-    json_file = open("models/generator_arch.json", 'r')
+    #load architecture
+    json_file = open("models_colin/generator_arch.json", 'r')
     loaded_generator_json = json_file.read()
     json_file.close()
     loaded_generator = model_from_json(loaded_generator_json)
-    # load weights into new model
+    logging.info('loading arch')
 
-    loaded_generator.load_weights('models/gan_generator_epoch_20.h5')
-    print("Loaded model")
+    # load weights into new model
+    loaded_generator.load_weights('models_colin/gan_generator_epoch_200.h5')
+    logging.info("Loaded model")
      
     #generate digits
     #plotGeneratedImages(200)
@@ -47,7 +52,15 @@ def test():
         plt.imshow(generatedImages[i], interpolation='nearest', cmap='gray_r')
         plt.axis('off')
     plt.tight_layout()
-    plt.savefig('images/gan_generated_image_epoch_20.png')    
+    plt.savefig('images/gan_generated_image_epoch_200.png')    
+
+log_format = '%(asctime)s %(message)s'
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, datefmt='%m/%d %I:%M:%S %p')
+fh = logging.FileHandler(os.path.join('logs', 'log.txt'))
+fh.setFormatter(logging.Formatter(log_format))
+logging.getLogger().addHandler(fh)
+
+
     
 gen_image = False
 if gen_image:
@@ -73,7 +86,7 @@ else:
     adam = Adam(lr=0.0002, beta_1=0.5)
 
 
-    print('starting to build models')
+    logging.info('starting to build models')
     generator = Sequential()
     generator.add(Dense(256, input_dim=randomDim, kernel_initializer=initializers.RandomNormal(stddev=0.02)))
     generator.add(LeakyReLU(0.2))
@@ -87,7 +100,7 @@ else:
     #set up the model
     # serialize model to JSON
     model_json = generator.to_json()
-    with open("models/generator_arch.json", "w") as json_file:
+    with open("models_colin/generator_arch.json", "w") as json_file:
         json_file.write(model_json)
 
     discriminator = Sequential()
@@ -113,6 +126,10 @@ else:
 
     dLosses = []
     gLosses = []
+    logging.info('set up models')
+
+
+    
 
 # Plot the loss from each batch
 def plotLoss(epoch):
@@ -123,6 +140,7 @@ def plotLoss(epoch):
     plt.ylabel('Loss')
     plt.legend()
     plt.savefig('images/gan_loss_epoch_%d.png' % epoch)
+    logging.info('saved plots')
     
 #load neural net weights from h5 and then generate images
 
@@ -142,21 +160,24 @@ def plotGeneratedImages(epoch, examples=100, dim=(10, 10), figsize=(10, 10)):
 
 # Save the generator and discriminator networks (and weights) for later use
 def saveModels(epoch):
-    generator.save('models/gan_generator_epoch_%d.h5' % epoch)
-    discriminator.save('models/gan_discriminator_epoch_%d.h5' % epoch)
+    generator.save('models_colin/gan_generator_epoch_%d.h5' % epoch)
+    discriminator.save('models_colin/gan_discriminator_epoch_%d.h5' % epoch)
+    logging.info('saved weights %d' % (epoch))
 
 def train(epochs=1, batchSize=128):
     batchCount = X_train.shape[0] / batchSize
+
+    logging.info('epochs %d batch size %d batches per epoch %d' % (epochs, batchSize, batchCount))
     
-    print('Epochs:', epochs)
-    print('Batch size:', batchSize)
-    print('Batches per epoch:', batchCount)
+    #print('Epochs:', epochs)
+    #print('Batch size:', batchSize)
+    #print('Batches per epoch:', batchCount)
 
     for e in range(1, epochs+1):
         if e==1 or e%20 == 0:
-            print('-'*15, 'Epoch %d' % e, '-'*15)
+            logging.info('Epoch %d' % e)
             
-        for _ in tqdm(range(int(batchCount))):
+        for _ in range(int(batchCount)):
             # Get a random set of input noise and images
             noise = np.random.normal(0, 1, size=[batchSize, randomDim])
             imageBatch = X_train[np.random.randint(0, X_train.shape[0], size=batchSize)]
@@ -185,12 +206,16 @@ def train(epochs=1, batchSize=128):
         dLosses.append(dloss)
         gLosses.append(gloss)
 
-        if e == 1 or e % 20 == 0:
+        if e == 1 or e % 10 == 0:
             #plotGeneratedImages(e)
             saveModels(e)
-            
-            print('dLosses, {}'.format(dLosses))
-            print('gLosses, {}'.format(gLosses))
+
+            logging.info('dLosses, gLosses')
+            logging.info(dLosses)
+            logging.info(gLosses)
+
+            #print('dLosses, {}'.format(dLosses))
+            #print('gLosses, {}'.format(gLosses))
 
     # Plot losses from every epoch
     #plotLoss(e)
