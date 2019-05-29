@@ -9,63 +9,118 @@ from keras.models import Model, Sequential
 from keras.layers.core import Reshape, Dense, Dropout, Flatten
 from keras.layers.advanced_activations import LeakyReLU
 from keras.layers.convolutional import Conv2D, UpSampling2D
-from keras.datasets import mnist
+from keras.datasets import mnist, fashion_mnist
 from keras.optimizers import Adam
 from keras import backend as K
 from keras import initializers
 
-K.set_image_dim_ordering('th')
+import logging
+import sys
 
-# Deterministic output.
-# Tired of seeing the same results every time? Remove the line below.
-np.random.seed(1000)
+def test():
 
-# The results are a little better when the dimensionality of the random vector is only 10.
-# The dimensionality has been left at 100 for consistency with other GAN implementations.
-randomDim = 100
+    #load architecture
+    json_file = open("models_colin/dc_generator_arch.json", 'r')
+    loaded_generator_json = json_file.read()
+    json_file.close()
+    loaded_generator = model_from_json(loaded_generator_json)
+    logging.info('loading arch')
 
-# Load MNIST data
-(X_train, y_train), (X_test, y_test) = mnist.load_data()
-X_train = (X_train.astype(np.float32) - 127.5)/127.5
-X_train = X_train[:, np.newaxis, :, :]
+    # load weights into new model
+    loaded_generator.load_weights('models_colin/dcgan_generator_epoch_50.h5')
+    logging.info("Loaded model")
+     
+    #generate digits
+    #plotGeneratedImages(200)
+    #epoch, examples=100, dim=(10, 10), figsize=(10, 10)):
+    examples = 100
+    figsize = (10, 10)
+    dim = (10, 10)
+    randomDim = 100
+    epoch = 50
+    noise = np.random.normal(0, 1, size=[examples, randomDim])
+    generatedImages = loaded_generator.predict(noise)
+    generatedImages = generatedImages.reshape(examples, 28, 28)
 
-# Optimizer
-adam = Adam(lr=0.0002, beta_1=0.5)
+    plt.figure(figsize=figsize)
+    for i in range(generatedImages.shape[0]):
+        plt.subplot(dim[0], dim[1], i+1)
+        plt.imshow(generatedImages[i], interpolation='nearest', cmap='gray_r')
+        plt.axis('off')
+    plt.tight_layout()
+    plt.savefig('images/dcgan_generated_image_epoch_50.png')    
 
-# Generator
-generator = Sequential()
-generator.add(Dense(128*7*7, input_dim=randomDim, kernel_initializer=initializers.RandomNormal(stddev=0.02)))
-generator.add(LeakyReLU(0.2))
-generator.add(Reshape((128, 7, 7)))
-generator.add(UpSampling2D(size=(2, 2)))
-generator.add(Conv2D(64, kernel_size=(5, 5), padding='same'))
-generator.add(LeakyReLU(0.2))
-generator.add(UpSampling2D(size=(2, 2)))
-generator.add(Conv2D(1, kernel_size=(5, 5), padding='same', activation='tanh'))
-generator.compile(loss='binary_crossentropy', optimizer=adam)
 
-# Discriminator
-discriminator = Sequential()
-discriminator.add(Conv2D(64, kernel_size=(5, 5), strides=(2, 2), padding='same', input_shape=(1, 28, 28), kernel_initializer=initializers.RandomNormal(stddev=0.02)))
-discriminator.add(LeakyReLU(0.2))
-discriminator.add(Dropout(0.3))
-discriminator.add(Conv2D(128, kernel_size=(5, 5), strides=(2, 2), padding='same'))
-discriminator.add(LeakyReLU(0.2))
-discriminator.add(Dropout(0.3))
-discriminator.add(Flatten())
-discriminator.add(Dense(1, activation='sigmoid'))
-discriminator.compile(loss='binary_crossentropy', optimizer=adam)
+log_format = '%(asctime)s %(message)s'
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, datefmt='%m/%d %I:%M:%S %p')
+fh = logging.FileHandler(os.path.join('logs', 'log.txt'))
+fh.setFormatter(logging.Formatter(log_format))
+logging.getLogger().addHandler(fh)
 
-# Combined network
-discriminator.trainable = False
-ganInput = Input(shape=(randomDim,))
-x = generator(ganInput)
-ganOutput = discriminator(x)
-gan = Model(inputs=ganInput, outputs=ganOutput)
-gan.compile(loss='binary_crossentropy', optimizer=adam)
+gen_image = False
+if gen_image:
+    test()
+else:
+    
+    K.set_image_dim_ordering('th')
 
-dLosses = []
-gLosses = []
+    # Deterministic output.
+    # Tired of seeing the same results every time? Remove the line below.
+    np.random.seed(1000)
+
+    # The results are a little better when the dimensionality of the random vector is only 10.
+    # The dimensionality has been left at 100 for consistency with other GAN implementations.
+    randomDim = 100
+
+    # Load MNIST data
+    (X_train, y_train), (X_test, y_test) = fashion_mnist.load_data()
+    X_train = (X_train.astype(np.float32) - 127.5)/127.5
+    X_train = X_train[:, np.newaxis, :, :]
+
+    # Optimizer
+    adam = Adam(lr=0.0002, beta_1=0.5)
+
+    # Generator
+    generator = Sequential()
+    generator.add(Dense(128*7*7, input_dim=randomDim, kernel_initializer=initializers.RandomNormal(stddev=0.02)))
+    generator.add(LeakyReLU(0.2))
+    generator.add(Reshape((128, 7, 7)))
+    generator.add(UpSampling2D(size=(2, 2)))
+    generator.add(Conv2D(64, kernel_size=(5, 5), padding='same'))
+    generator.add(LeakyReLU(0.2))
+    generator.add(UpSampling2D(size=(2, 2)))
+    generator.add(Conv2D(1, kernel_size=(5, 5), padding='same', activation='tanh'))
+    generator.compile(loss='binary_crossentropy', optimizer=adam)
+
+    #set up the model
+    # serialize model to JSON
+    model_json = generator.to_json()
+    with open("models_colin/dc_generator_arch.json", "w") as json_file:
+        json_file.write(model_json)
+
+    # Discriminator
+    discriminator = Sequential()
+    discriminator.add(Conv2D(64, kernel_size=(5, 5), strides=(2, 2), padding='same', input_shape=(1, 28, 28), kernel_initializer=initializers.RandomNormal(stddev=0.02)))
+    discriminator.add(LeakyReLU(0.2))
+    discriminator.add(Dropout(0.3))
+    discriminator.add(Conv2D(128, kernel_size=(5, 5), strides=(2, 2), padding='same'))
+    discriminator.add(LeakyReLU(0.2))
+    discriminator.add(Dropout(0.3))
+    discriminator.add(Flatten())
+    discriminator.add(Dense(1, activation='sigmoid'))
+    discriminator.compile(loss='binary_crossentropy', optimizer=adam)
+
+    # Combined network
+    discriminator.trainable = False
+    ganInput = Input(shape=(randomDim,))
+    x = generator(ganInput)
+    ganOutput = discriminator(x)
+    gan = Model(inputs=ganInput, outputs=ganOutput)
+    gan.compile(loss='binary_crossentropy', optimizer=adam)
+
+    dLosses = []
+    gLosses = []
+    logging.info('set up models')
 
 # Plot the loss from each batch
 def plotLoss(epoch):
@@ -92,18 +147,17 @@ def plotGeneratedImages(epoch, examples=100, dim=(10, 10), figsize=(10, 10)):
 
 # Save the generator and discriminator networks (and weights) for later use
 def saveModels(epoch):
-    generator.save('models/dcgan_generator_epoch_%d.h5' % epoch)
-    discriminator.save('models/dcgan_discriminator_epoch_%d.h5' % epoch)
+    generator.save('models_colin/dcgan_generator_epoch_%d.h5' % epoch)
+    discriminator.save('models_colin/dcgan_discriminator_epoch_%d.h5' % epoch)
 
 def train(epochs=1, batchSize=128):
     batchCount = X_train.shape[0] / batchSize
-    print 'Epochs:', epochs
-    print 'Batch size:', batchSize
-    print 'Batches per epoch:', batchCount
 
-    for e in xrange(1, epochs+1):
-        print '-'*15, 'Epoch %d' % e, '-'*15
-        for _ in tqdm(xrange(batchCount)):
+    logging.info('epochs %d batch size %d batches per epoch %d' % (epochs, batchSize, batchCount))
+
+    for e in range(1, epochs+1):
+        logging.info('epoch %d' % e)
+        for _ in range(int(batchCount)):
             # Get a random set of input noise and images
             noise = np.random.normal(0, 1, size=[batchSize, randomDim])
             imageBatch = X_train[np.random.randint(0, X_train.shape[0], size=batchSize)]
@@ -132,11 +186,11 @@ def train(epochs=1, batchSize=128):
         gLosses.append(gloss)
 
         if e == 1 or e % 5 == 0:
-            plotGeneratedImages(e)
+            #plotGeneratedImages(e)
             saveModels(e)
 
     # Plot losses from every epoch
-    plotLoss(e)
+    #plotLoss(e)
 
 if __name__ == '__main__':
     train(50, 128)
