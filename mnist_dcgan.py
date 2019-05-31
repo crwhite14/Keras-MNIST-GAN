@@ -13,31 +13,30 @@ from keras.datasets import mnist, fashion_mnist
 from keras.optimizers import Adam
 from keras import backend as K
 from keras import initializers
+from keras.models import model_from_json
 
 import logging
 import sys
+import argparse
 
-def test():
+def test(epoch):
 
     #load architecture
-    json_file = open("models_colin/dc_generator_arch.json", 'r')
+    json_file = open('models_colin/dc_generator_arch.json', 'r')
     loaded_generator_json = json_file.read()
     json_file.close()
     loaded_generator = model_from_json(loaded_generator_json)
     logging.info('loading arch')
 
     # load weights into new model
-    loaded_generator.load_weights('models_colin/dcgan_generator_epoch_50.h5')
-    logging.info("Loaded model")
+    loaded_generator.load_weights('models_colin/dcgan_generator_epoch_%d.h5' % epoch)
+    logging.info("loaded model")
      
     #generate digits
-    #plotGeneratedImages(200)
-    #epoch, examples=100, dim=(10, 10), figsize=(10, 10)):
     examples = 100
     figsize = (10, 10)
     dim = (10, 10)
     randomDim = 100
-    epoch = 50
     noise = np.random.normal(0, 1, size=[examples, randomDim])
     generatedImages = loaded_generator.predict(noise)
     generatedImages = generatedImages.reshape(examples, 28, 28)
@@ -48,19 +47,92 @@ def test():
         plt.imshow(generatedImages[i], interpolation='nearest', cmap='gray_r')
         plt.axis('off')
     plt.tight_layout()
-    plt.savefig('images/dcgan_generated_image_epoch_50.png')    
+    plt.savefig('images/dcgan_generated_image_epoch_%d.png' % epoch)    
 
 
-log_format = '%(asctime)s %(message)s'
-logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, datefmt='%m/%d %I:%M:%S %p')
-fh = logging.FileHandler(os.path.join('logs', 'log.txt'))
-fh.setFormatter(logging.Formatter(log_format))
-logging.getLogger().addHandler(fh)
+# Plot the loss from each batch
+def plotLoss(epoch):
+    plt.figure(figsize=(10, 8))
+    plt.plot(dLosses, label='Discriminitive loss')
+    plt.plot(gLosses, label='Generative loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.savefig('images/dcgan_loss_epoch_%d.png' % epoch)
 
-gen_image = False
-if gen_image:
-    test()
-else:
+# Create a wall of generated MNIST images
+def plotGeneratedImages(epoch, examples=100, dim=(10, 10), figsize=(10, 10)):
+    noise = np.random.normal(0, 1, size=[examples, randomDim])
+    generatedImages = generator.predict(noise)
+
+    plt.figure(figsize=figsize)
+    for i in range(generatedImages.shape[0]):
+        plt.subplot(dim[0], dim[1], i+1)
+        plt.imshow(generatedImages[i, 0], interpolation='nearest', cmap='gray_r')
+        plt.axis('off')
+    plt.tight_layout()
+    plt.savefig('images/dcgan_generated_image_epoch_%d.png' % epoch)
+
+# Save the generator and discriminator networks (and weights) for later use
+def saveModels(epoch):
+    generator.save('models_colin/dcgan_generator_epoch_%d.h5' % epoch)
+    discriminator.save('models_colin/dcgan_discriminator_epoch_%d.h5' % epoch)
+
+def train(epochs, batchSize=128):
+    batchCount = X_train.shape[0] / batchSize
+
+    logging.info('epochs %d batch size %d batches per epoch %d' % (epochs, batchSize, batchCount))
+
+    for e in range(1, epochs+1):
+        logging.info('epoch %d' % e)
+        for _ in range(int(batchCount)):
+            # Get a random set of input noise and images
+            noise = np.random.normal(0, 1, size=[batchSize, randomDim])
+            imageBatch = X_train[np.random.randint(0, X_train.shape[0], size=batchSize)]
+
+            # Generate fake MNIST images
+            generatedImages = generator.predict(noise)
+            X = np.concatenate([imageBatch, generatedImages])
+
+            # Labels for generated and real data
+            yDis = np.zeros(2*batchSize)
+            # One-sided label smoothing
+            yDis[:batchSize] = 0.9
+
+            # Train discriminator
+            discriminator.trainable = True
+            dloss = discriminator.train_on_batch(X, yDis)
+
+            # Train generator
+            noise = np.random.normal(0, 1, size=[batchSize, randomDim])
+            yGen = np.ones(batchSize)
+            discriminator.trainable = False
+            gloss = gan.train_on_batch(noise, yGen)
+
+        # Store loss of most recent batch from this epoch
+        dLosses.append(dloss)
+        gLosses.append(gloss)
+
+        if e == 1 or e % 5 == 0:
+            #plotGeneratedImages(e)
+            saveModels(e)
+
+    # Plot losses from every epoch
+    #plotLoss(e)
+
+
+def main(args):
+
+    log_format = '%(asctime)s %(message)s'
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, datefmt='%m/%d %I:%M:%S %p')
+    fh = logging.FileHandler(os.path.join('logs', 'log.txt'))
+    fh.setFormatter(logging.Formatter(log_format))
+    logging.getLogger().addHandler(fh)
+
+    if not args.train:
+        test(args.epochs)
+        return None
+
     
     K.set_image_dim_ordering('th')
 
@@ -122,76 +194,16 @@ else:
     gLosses = []
     logging.info('set up models')
 
-# Plot the loss from each batch
-def plotLoss(epoch):
-    plt.figure(figsize=(10, 8))
-    plt.plot(dLosses, label='Discriminitive loss')
-    plt.plot(gLosses, label='Generative loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.savefig('images/dcgan_loss_epoch_%d.png' % epoch)
+    train(50,128)
 
-# Create a wall of generated MNIST images
-def plotGeneratedImages(epoch, examples=100, dim=(10, 10), figsize=(10, 10)):
-    noise = np.random.normal(0, 1, size=[examples, randomDim])
-    generatedImages = generator.predict(noise)
-
-    plt.figure(figsize=figsize)
-    for i in range(generatedImages.shape[0]):
-        plt.subplot(dim[0], dim[1], i+1)
-        plt.imshow(generatedImages[i, 0], interpolation='nearest', cmap='gray_r')
-        plt.axis('off')
-    plt.tight_layout()
-    plt.savefig('images/dcgan_generated_image_epoch_%d.png' % epoch)
-
-# Save the generator and discriminator networks (and weights) for later use
-def saveModels(epoch):
-    generator.save('models_colin/dcgan_generator_epoch_%d.h5' % epoch)
-    discriminator.save('models_colin/dcgan_discriminator_epoch_%d.h5' % epoch)
-
-def train(epochs=1, batchSize=128):
-    batchCount = X_train.shape[0] / batchSize
-
-    logging.info('epochs %d batch size %d batches per epoch %d' % (epochs, batchSize, batchCount))
-
-    for e in range(1, epochs+1):
-        logging.info('epoch %d' % e)
-        for _ in range(int(batchCount)):
-            # Get a random set of input noise and images
-            noise = np.random.normal(0, 1, size=[batchSize, randomDim])
-            imageBatch = X_train[np.random.randint(0, X_train.shape[0], size=batchSize)]
-
-            # Generate fake MNIST images
-            generatedImages = generator.predict(noise)
-            X = np.concatenate([imageBatch, generatedImages])
-
-            # Labels for generated and real data
-            yDis = np.zeros(2*batchSize)
-            # One-sided label smoothing
-            yDis[:batchSize] = 0.9
-
-            # Train discriminator
-            discriminator.trainable = True
-            dloss = discriminator.train_on_batch(X, yDis)
-
-            # Train generator
-            noise = np.random.normal(0, 1, size=[batchSize, randomDim])
-            yGen = np.ones(batchSize)
-            discriminator.trainable = False
-            gloss = gan.train_on_batch(noise, yGen)
-
-        # Store loss of most recent batch from this epoch
-        dLosses.append(dloss)
-        gLosses.append(gloss)
-
-        if e == 1 or e % 5 == 0:
-            #plotGeneratedImages(e)
-            saveModels(e)
-
-    # Plot losses from every epoch
-    #plotLoss(e)
 
 if __name__ == '__main__':
-    train(50, 128)
+
+    parser = argparse.ArgumentParser(description='Args for SHA with weight sharing')
+    parser.add_argument('--epochs', dest='epochs', type=int, default=15)    
+    parser.add_argument('--train', dest='train', type=int, default=0)   
+
+    args = parser.parse_args()
+
+    main(args)
 
