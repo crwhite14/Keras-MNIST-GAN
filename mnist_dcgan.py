@@ -1,7 +1,6 @@
 import os
 os.environ["KERAS_BACKEND"] = "tensorflow"
 import numpy as np
-from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 from keras.layers import Input
@@ -74,7 +73,7 @@ def plotGeneratedImages(epoch, examples=100, dim=(10, 10), figsize=(10, 10)):
     plt.savefig('images/dcgan_generated_image_epoch_%d.png' % epoch)
 
 # Save the generator and discriminator networks (and weights) for later use
-def saveModels(epoch):
+def saveModels(epoch, generator, discriminator):
     generator.save('models_colin/dcgan_generator_epoch_%d.h5' % epoch)
     discriminator.save('models_colin/dcgan_discriminator_epoch_%d.h5' % epoch)
 
@@ -176,7 +175,7 @@ def train(epochs, batchSize=128):
 
         if e == 1 or e % 5 == 0:
             #plotGeneratedImages(e)
-            saveModels(e)
+            saveModels(e, generator, discriminator)
 
     # Plot losses from every epoch
     #plotLoss(e)
