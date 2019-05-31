@@ -79,61 +79,7 @@ def saveModels(epoch):
     discriminator.save('models_colin/dcgan_discriminator_epoch_%d.h5' % epoch)
 
 def train(epochs, batchSize=128):
-    batchCount = X_train.shape[0] / batchSize
 
-    logging.info('epochs %d batch size %d batches per epoch %d' % (epochs, batchSize, batchCount))
-
-    for e in range(1, epochs+1):
-        logging.info('epoch %d' % e)
-        for _ in range(int(batchCount)):
-            # Get a random set of input noise and images
-            noise = np.random.normal(0, 1, size=[batchSize, randomDim])
-            imageBatch = X_train[np.random.randint(0, X_train.shape[0], size=batchSize)]
-
-            # Generate fake MNIST images
-            generatedImages = generator.predict(noise)
-            X = np.concatenate([imageBatch, generatedImages])
-
-            # Labels for generated and real data
-            yDis = np.zeros(2*batchSize)
-            # One-sided label smoothing
-            yDis[:batchSize] = 0.9
-
-            # Train discriminator
-            discriminator.trainable = True
-            dloss = discriminator.train_on_batch(X, yDis)
-
-            # Train generator
-            noise = np.random.normal(0, 1, size=[batchSize, randomDim])
-            yGen = np.ones(batchSize)
-            discriminator.trainable = False
-            gloss = gan.train_on_batch(noise, yGen)
-
-        # Store loss of most recent batch from this epoch
-        dLosses.append(dloss)
-        gLosses.append(gloss)
-
-        if e == 1 or e % 5 == 0:
-            #plotGeneratedImages(e)
-            saveModels(e)
-
-    # Plot losses from every epoch
-    #plotLoss(e)
-
-
-def main(args):
-
-    log_format = '%(asctime)s %(message)s'
-    logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, datefmt='%m/%d %I:%M:%S %p')
-    fh = logging.FileHandler(os.path.join('logs', 'log.txt'))
-    fh.setFormatter(logging.Formatter(log_format))
-    logging.getLogger().addHandler(fh)
-
-    if not args.train:
-        test(args.epochs)
-        return None
-
-    
     K.set_image_dim_ordering('th')
 
     # Deterministic output.
@@ -194,7 +140,61 @@ def main(args):
     gLosses = []
     logging.info('set up models')
 
-    train(50,128)
+    batchCount = X_train.shape[0] / batchSize
+
+    logging.info('epochs %d batch size %d batches per epoch %d' % (epochs, batchSize, batchCount))
+
+    for e in range(1, epochs+1):
+        logging.info('epoch %d' % e)
+        for _ in range(int(batchCount)):
+            # Get a random set of input noise and images
+            noise = np.random.normal(0, 1, size=[batchSize, randomDim])
+            imageBatch = X_train[np.random.randint(0, X_train.shape[0], size=batchSize)]
+
+            # Generate fake MNIST images
+            generatedImages = generator.predict(noise)
+            X = np.concatenate([imageBatch, generatedImages])
+
+            # Labels for generated and real data
+            yDis = np.zeros(2*batchSize)
+            # One-sided label smoothing
+            yDis[:batchSize] = 0.9
+
+            # Train discriminator
+            discriminator.trainable = True
+            dloss = discriminator.train_on_batch(X, yDis)
+
+            # Train generator
+            noise = np.random.normal(0, 1, size=[batchSize, randomDim])
+            yGen = np.ones(batchSize)
+            discriminator.trainable = False
+            gloss = gan.train_on_batch(noise, yGen)
+
+        # Store loss of most recent batch from this epoch
+        dLosses.append(dloss)
+        gLosses.append(gloss)
+
+        if e == 1 or e % 5 == 0:
+            #plotGeneratedImages(e)
+            saveModels(e)
+
+    # Plot losses from every epoch
+    #plotLoss(e)
+
+
+def main(args):
+
+    log_format = '%(asctime)s %(message)s'
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, datefmt='%m/%d %I:%M:%S %p')
+    fh = logging.FileHandler(os.path.join('logs', 'log.txt'))
+    fh.setFormatter(logging.Formatter(log_format))
+    logging.getLogger().addHandler(fh)
+
+    if not args.train:
+        test(args.epochs)
+    else:
+        train(50, 128)
+
 
 
 if __name__ == '__main__':
