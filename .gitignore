@@ -1,5 +1,4 @@
-images/gan*
-images/dcgan*
+images*
 logs*
 models*
 model_colin*
